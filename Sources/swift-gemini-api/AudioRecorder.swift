@@ -144,6 +144,7 @@ public final class AudioRecorder: ObservableObject, AudioRecorderProtocol {
         }
     }
     
+    #if os(macOS)
     func getDeviceSampleRate(deviceID: AudioDeviceID) -> Double? {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyNominalSampleRate,
@@ -157,6 +158,7 @@ public final class AudioRecorder: ObservableObject, AudioRecorderProtocol {
         let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &rate)
         return status == noErr ? rate : nil
     }
+    #endif
 
     private func createInputAudioUnit() -> OSStatus {
         var status: OSStatus = noErr
@@ -212,6 +214,9 @@ public final class AudioRecorder: ObservableObject, AudioRecorderProtocol {
         )
         guard status == noErr else { return status }
 
+        // Device selection and sample rate — macOS only
+        // On iOS, RemoteIO uses the system default device automatically
+        #if os(macOS)
         // Choose input device (default input)
         var deviceID = AudioDeviceID(0)
         var propertySize = UInt32(MemoryLayout<AudioDeviceID>.size)
@@ -249,6 +254,10 @@ public final class AudioRecorder: ObservableObject, AudioRecorderProtocol {
         
         // 48000
         let sampleRate = getDeviceSampleRate(deviceID: deviceID) ?? 44100
+        #else
+        // On iOS, use 44100 as default — AVAudioSession will manage the actual hardware rate
+        let sampleRate: Double = 44100
+        #endif
 
         streamFormat = AudioStreamBasicDescription(
             mSampleRate: sampleRate,
@@ -312,19 +321,6 @@ public final class AudioRecorder: ObservableObject, AudioRecorderProtocol {
     func convertTo16kHz(inputData: UnsafeRawPointer, inputFrames: UInt32) -> Data? {
         guard let converter = audioConverter else { return nil }
 
-//        let convertedData = Data(count: Int(inputFrames * 2 * 2)) // Max size estimation
-
-//        let inputBuffer = AudioBuffer(
-//            mNumberChannels: 1,
-//            mDataByteSize: inputFrames * streamFormat.mBytesPerFrame,
-//            mData: UnsafeMutableRawPointer(mutating: inputData)
-//        )
-
-//        let inputBufferList = AudioBufferList(
-//            mNumberBuffers: 1,
-//            mBuffers: inputBuffer
-//        )
-
         var ioOutputDataPacketSize: UInt32 = inputFrames
 
         let outputBuffer = UnsafeMutableRawPointer.allocate(byteCount: Int(inputFrames * 2), alignment: MemoryLayout<UInt8>.alignment)
@@ -349,8 +345,6 @@ public final class AudioRecorder: ObservableObject, AudioRecorderProtocol {
             &convertedBufferList,
             nil
         )
-        
-//        AudioConverterDispose(converter!)
 
         if status != noErr {
             print("AudioConverterFillComplexBuffer failed: \(status)")
@@ -410,11 +404,6 @@ private func inputCallback(
             print("Failed to write audio data: \(writeStatus)")
         }
 
-// 	      // converts existing format of 48kHz
-//        let data = Data(bytes: buffer, count: Int(audioBuffer.mDataByteSize))
-//        let base64String = data.base64EncodedString()
-//        recorder.onChunk?(base64String)
-        
         if let convertedData = recorder.convertTo16kHz(inputData: buffer, inputFrames: inNumberFrames) {
             let base64String = convertedData.base64EncodedString()
             recorder.onChunk?(base64String)
