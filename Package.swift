@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "swift-gemini-api",
 	platforms: [
-		.iOS(.v14),
+		.iOS(.v17),
 		.macOS(.v15)
 	],
     products: [
