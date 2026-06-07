@@ -529,7 +529,7 @@ public final class GeminiLiveClient: NSObject, URLSessionWebSocketDelegate {
 		}
     }
     
-    func sendImage(_ base64: String, mimeType: String = "image/jpeg") {
+    public func sendImage(_ base64: String, mimeType: String = "image/jpeg") {
         let message: [String: Any] = [
             "realtimeInput": [
                 "mediaChunks": [
